@@ -10,36 +10,30 @@ export async function onRequest(context) {
     });
   }
 
-  // Using an open proxy or direct fetch with full headers
   const targetUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&filter[search]=${encodeURIComponent(query)}&page[size]=10`;
 
   try {
-    const response = await fetch(targetUrl, {
+    // Route through AllOrigins raw service to bypass datacenter blocks and CORS restrictions
+    const proxyUrl = `https://api.allorigins.win/raw?url=` + encodeURIComponent(targetUrl);
+    
+    const response = await fetch(proxyUrl, {
       headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'Accept': 'application/json'
       }
     });
 
     if (!response.ok) {
-      // If BattleMetrics blocks direct server-to-server requests, fallback to a public CORS proxy
-      const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(targetUrl);
-      const proxyResponse = await fetch(proxyUrl);
-      
-      if (!proxyResponse.ok) {
-        throw new Error(`Proxy failed with status ${proxyResponse.status}`);
-      }
-      
-      const proxyData = await proxyResponse.json();
-      return new Response(JSON.stringify(proxyData), {
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
+      throw new Error(`Proxy error: Status ${response.status}`);
     }
 
-    const data = await response.json();
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      throw new Error('Received invalid data format from upstream tracker');
+    }
+
     return new Response(JSON.stringify(data), {
       headers: {
         'Content-Type': 'application/json',
@@ -49,7 +43,10 @@ export async function onRequest(context) {
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), { 
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
     });
   }
 }
