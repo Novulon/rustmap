@@ -15,8 +15,9 @@ export async function onRequest(context) {
   try {
     const response = await fetch(targetUrl, {
       headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'NovulonsRustTracker/1.0 (Contact: admin@rustmap.pages.dev)'
+        'Accept': 'application/json, text/plain, */*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://www.battlemetrics.com/'
       }
     });
 
