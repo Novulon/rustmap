@@ -14,7 +14,7 @@ export async function onRequest(context) {
     });
   }
 
-  // Sanitize query & tokenize
+  // 1. Sanitize query & tokenize
   const cleanedQuery = rawQuery.replace(/[|\[\]()\\/:\-_]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
   const searchTerms = cleanedQuery.split(' ').filter(term => term.length >= 2);
 
@@ -31,7 +31,7 @@ export async function onRequest(context) {
 
   const stopWords = new Set(['eu', 'us', 'uk', 'au', '1x', '2x', '3x', '5x', 'vanilla', 'monthly', 'weekly', 'solo', 'duo', 'trio', 'quad', 'main']);
 
-  // Sort keywords: longest non-stopwords first
+  // Sort terms: specific non-stopwords first
   const sortedTerms = [...searchTerms].sort((a, b) => {
     const aStop = stopWords.has(a) ? 1 : 0;
     const bStop = stopWords.has(b) ? 1 : 0;
@@ -39,38 +39,51 @@ export async function onRequest(context) {
     return b.length - a.length;
   });
 
-  const anchorTerm = sortedTerms[0] || cleanedQuery;
   const headers = {
     'Accept': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   };
 
   let candidateServers = [];
+  let lastApiError = null;
 
-  try {
-    // Stage 1: Search BattleMetrics with primary anchor keyword
-    const primaryUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&filter[search]=${encodeURIComponent(anchorTerm)}&page[size]=100`;
-    let res = await fetch(primaryUrl, { headers });
+  // 2. Sequential multi-term attempt
+  for (const term of sortedTerms) {
+    if (candidateServers.length > 0) break;
 
-    if (res.ok) {
+    try {
+      const bmUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&filter[search]=${encodeURIComponent(term)}&page[size]=100`;
+      const res = await fetch(bmUrl, { headers });
+
+      if (!res.ok) {
+        lastApiError = `BattleMetrics API returned status ${res.status}`;
+        continue;
+      }
+
       const json = await res.json();
-      candidateServers = json.data || [];
+      if (json && json.data && json.data.length > 0) {
+        candidateServers = json.data;
+      }
+    } catch (e) {
+      lastApiError = e.message;
     }
+  }
 
-    // Stage 2: Fallback to general active server list if anchor search returned empty
-    if (candidateServers.length === 0) {
+  // 3. Fallback to top active servers if term-specific fetches failed
+  if (candidateServers.length === 0 && !lastApiError) {
+    try {
       const fallbackUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&page[size]=100`;
-      res = await fetch(fallbackUrl, { headers });
+      const res = await fetch(fallbackUrl, { headers });
       if (res.ok) {
         const json = await res.json();
         candidateServers = json.data || [];
       }
+    } catch (e) {
+      lastApiError = e.message;
     }
-  } catch (e) {
-    console.error("BattleMetrics fetch error:", e);
   }
 
-  // Local weighted re-ranking
+  // 4. Local weighted scoring
   const scored = candidateServers.map(server => {
     const name = (server.attributes && server.attributes.name) ? server.attributes.name.toLowerCase() : '';
     let score = 0;
@@ -95,6 +108,7 @@ export async function onRequest(context) {
     .sort((a, b) => b.score - a.score)
     .map(item => item.server);
 
+  // 5. Response output
   if (results.length > 0) {
     return new Response(JSON.stringify({ data: results }), {
       status: 200,
@@ -106,7 +120,11 @@ export async function onRequest(context) {
     });
   }
 
-  return new Response(JSON.stringify({ data: [], error: 'No Rust servers found matching query.' }), {
+  return new Response(JSON.stringify({ 
+    data: [], 
+    error: lastApiError || 'No Rust servers found matching query terms.',
+    debug: { searchedTerms: sortedTerms, candidatesFetched: candidateServers.length }
+  }), {
     status: 200,
     headers: {
       'Content-Type': 'application/json',
