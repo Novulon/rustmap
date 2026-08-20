@@ -10,11 +10,11 @@ export async function onRequest(context) {
     });
   }
 
+  // Extract core keywords from the query (ignoring pipes, symbols, and small words)
   const cleanedQuery = query.replace(/[|]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-  const searchTerms = cleanedQuery.split(' ').filter(term => term.length > 1);
+  const searchTerms = cleanedQuery.split(' ').filter(term => term.length > 2);
 
   async function fetchFromBM(targetUrl) {
-    // Method 1: Direct fetch
     try {
       const res = await fetch(targetUrl, {
         headers: {
@@ -27,49 +27,34 @@ export async function onRequest(context) {
         if (json && json.data) return json.data;
       }
     } catch (e) {}
-
-    // Method 2: AllOrigins Proxy
-    try {
-      const proxyUrl = `https://api.allorigins.win/raw?url=` + encodeURIComponent(targetUrl);
-      const res = await fetch(proxyUrl);
-      if (res.ok) {
-        const text = await res.text();
-        const json = JSON.parse(text);
-        if (json && json.data) return json.data;
-      }
-    } catch (e) {}
-
-    // Method 3: CorsProxy.io
-    try {
-      const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(targetUrl);
-      const res = await fetch(proxyUrl);
-      if (res.ok) {
-        const json = await res.json();
-        if (json && json.data) return json.data;
-      }
-    } catch (e) {}
-
     return null;
   }
 
   let servers = null;
 
-  // Try standard BattleMetrics search first
-  const searchUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&filter[search]=${encodeURIComponent(query)}&page[size]=25`;
-  servers = await fetchFromBM(searchUrl);
-
-  // If standard search returns nothing, fetch active Rust servers and match keywords locally
-  if (!servers || servers.length === 0) {
-    const generalUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&page[size]=100`;
-    const allServers = await fetchFromBM(generalUrl);
-    
-    if (allServers && allServers.length > 0) {
-      servers = allServers.filter(server => {
-        const name = (server.attributes && server.attributes.name) ? server.attributes.name.toLowerCase() : '';
-        // Match if any significant keyword (like 'hapis' or 'monthly') is present in the server name
-        return searchTerms.some(term => name.includes(term));
+  // Since BattleMetrics strict search fails on pipes/symbols, let's fetch active Rust servers directly 
+  // and do a robust case-insensitive keyword match on the server names.
+  const generalUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&page[size]=100`;
+  const allServers = await fetchFromBM(generalUrl);
+  
+  if (allServers && allServers.length > 0) {
+    servers = allServers.filter(server => {
+      const name = (server.attributes && server.attributes.name) ? server.attributes.name.toLowerCase() : '';
+      // Match if the server name contains at least two of the primary keywords (e.g., 'hapis', 'monthly')
+      // Or matches the primary token directly
+      let matches = 0;
+      searchTerms.forEach(term => {
+        if (name.includes(term)) matches++;
       });
-    }
+      return matches > 0 || name.includes(cleanedQuery);
+    });
+  }
+
+  // Fallback to standard search if local filter returned nothing
+  if (!servers || servers.length === 0) {
+    const singleTerm = searchTerms[0] || cleanedQuery;
+    const searchUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&filter[search]=${encodeURIComponent(singleTerm)}&page[size]=25`;
+    servers = await fetchFromBM(searchUrl);
   }
 
   if (servers && servers.length > 0) {
