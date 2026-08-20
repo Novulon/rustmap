@@ -10,50 +10,63 @@ export async function onRequest(context) {
     });
   }
 
-  const targetUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&filter[search]=${encodeURIComponent(query)}&page[size]=10`;
+  // Clean query: strip out pipes (|) and excessive spacing which break BattleMetrics search
+  const cleanedQuery = query.replace(/[|]/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = cleanedQuery.split(' ');
+  const shortQuery = words.slice(0, 3).join(' ');
 
-  let data = null;
-
-  // Method 1: Direct fetch with browser headers
-  try {
-    const response = await fetch(targetUrl, {
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+  async function fetchBM(qStr) {
+    const targetUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&filter[search]=${encodeURIComponent(qStr)}&page[size]=10`;
+    
+    // Method 1: Direct fetch
+    try {
+      const res = await fetch(targetUrl, {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.data && json.data.length > 0) return json;
       }
-    });
-    if (response.ok) {
-      data = await response.json();
-    }
-  } catch (e) {
-    // Try fallback
-  }
+    } catch (e) {}
 
-  // Method 2: AllOrigins Proxy
-  if (!data) {
+    // Method 2: AllOrigins Proxy
     try {
       const proxyUrl = `https://api.allorigins.win/raw?url=` + encodeURIComponent(targetUrl);
-      const response = await fetch(proxyUrl);
-      if (response.ok) {
-        const text = await response.text();
-        data = JSON.parse(text);
+      const res = await fetch(proxyUrl);
+      if (res.ok) {
+        const text = await res.text();
+        const json = JSON.parse(text);
+        if (json && json.data && json.data.length > 0) return json;
       }
-    } catch (e) {
-      // Try fallback
-    }
-  }
+    } catch (e) {}
 
-  // Method 3: CorsProxy.io
-  if (!data) {
+    // Method 3: CorsProxy.io
     try {
       const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(targetUrl);
-      const response = await fetch(proxyUrl);
-      if (response.ok) {
-        data = await response.json();
+      const res = await fetch(proxyUrl);
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.data && json.data.length > 0) return json;
       }
-    } catch (e) {
-      // Ignore
-    }
+    } catch (e) {}
+
+    return null;
+  }
+
+  // 1. Try with the cleaned query
+  let data = await fetchBM(cleanedQuery);
+
+  // 2. Fallback to short query if no results found
+  if ((!data || !data.data || data.data.length === 0) && shortQuery !== cleanedQuery && shortQuery.length > 1) {
+    data = await fetchBM(shortQuery);
+  }
+
+  // 3. Fallback to first keyword if multiple words exist
+  if ((!data || !data.data || data.data.length === 0) && words.length > 1) {
+    data = await fetchBM(words[0]);
   }
 
   if (data && data.data) {
@@ -65,8 +78,7 @@ export async function onRequest(context) {
     });
   }
 
-  // Fallback response so the frontend receives valid JSON instead of a 500 error
-  return new Response(JSON.stringify({ data: [], error: 'BattleMetrics search temporarily restricted.' }), {
+  return new Response(JSON.stringify({ data: [], error: 'No Rust servers found matching query.' }), {
     status: 200,
     headers: {
       'Content-Type': 'application/json',
