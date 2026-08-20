@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@liamcottle/rustplus.js": "^2.5.0",
+    "firebase-admin": "^14.3.0"
+  }
+}

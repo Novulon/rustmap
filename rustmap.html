@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Novulon's Rust Tracker | NRT</title>
+  <style>
+    :root {
+      /* Modern Slate/Navy Dark Theme */
+      --bg-base: #0b0f19;
+      --bg-panel: #131b2c;
+      --bg-input: #06090f;
+      --border-soft: #243049;
+      --border-focus: #3b82f6;
+      
+      /* Accents */
+      --accent-primary: #3b82f6;
+      --accent-primary-hover: #2563eb;
+      --accent-success: #10b981;
+      --accent-success-hover: #059669;
+      --accent-danger: #ef4444;
+      --accent-warning: #f59e0b;
+      --accent-cyan: #06b6d4;
+
+      /* Text */
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      
+      /* Shadows & FX */
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.2);
+      --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.25);
+    }
+
+    * { box-sizing: border-box; }
+    
+    body {
+      margin: 0;
+      background: var(--bg-base);
+      color: var(--text-main);
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 30px 20px;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* --- CUSTOM SCROLLBAR --- */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-input); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--border-soft); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* --- PLAIN MODE OVERRIDE (NO ANIMATIONS / FX) --- */
+    body.no-animations *,
+    body.no-animations *::before,
+    body.no-animations *::after {
+      animation: none !important;
+      transition: none !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+      backdrop-filter: none !important;
+    }
+
+    body.no-animations .controls-card:hover {
+      border-color: var(--border-soft) !important;
+    }
+
+    /* --- HEADER --- */
+    .header-container {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .header-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      margin: 0;
+      background: linear-gradient(to right, #60a5fa, #06b6d4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: var(--shadow-glow);
+    }
+
+    .nrt-badge {
+      background: rgba(59, 130, 246, 0.1);
+      color: #60a5fa;
+      border: 1px solid rgba(96, 165, 250, 0.3);
+      font-weight: 700;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      box-shadow: inset 0 0 10px rgba(59, 130, 246, 0.1);
+    }
+
+    /* --- CONTROL PANEL --- */
+    .controls-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-soft);
+      border-radius: 16px;
+      padding: 24px;
+      width: 100%;
+      max-width: 900px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-lg);
+      transition: border-color 0.3s ease;
+    }
+
+    .controls-card:hover {
+      border-color: rgba(59, 130, 246, 0.3);
+    }
+
+    .input-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .input-group {
+      display: flex;
+      flex: 1;
+      gap: 6px;
+    }
+
+    /* --- INPUTS & BUTTONS --- */
+    input[type="text"], input[type="password"] {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border-soft);
+      color: var(--text-main);
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    input::placeholder {
+      color: var(--text-muted);
+      opacity: 0.7;
+    }
+
+    input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+
+    button {
+      background: var(--accent-primary);
+      color: #fff;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    button:hover {
+      background: var(--accent-primary-hover);
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .btn-help {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-soft);
+      color: var(--accent-cyan);
+      padding: 0 14px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-help:hover {
+      background: rgba(6, 182, 212, 0.15);
+      border-color: var(--accent-cyan);
+    }
+
+    /* --- HELP BOX EXPLANATIONS --- */
+    .help-box {
+      background: var(--bg-input);
+      border: 1px solid var(--border-soft);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .help-box h4 {
+      margin: 0 0 8px 0;
+      color: var(--text-main);
+      font-size: 14px;
+    }
+
+    .help-box ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .help-box code {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--accent-cyan);
+      font-family: monospace;
+    }
+
+    .btn-success { background: var(--accent-success); }
+    .btn-success:hover { background: var(--accent-success-hover); }
+    
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-soft);
+      color: var(--text-main);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* --- SEARCH RESULTS --- */
+    #search-results {
+      max-height: 200px;
+      overflow-y: auto;
+      background: var(--bg-input);
+      border: 1px solid var(--border-soft);
+      border-radius: 8px;
+      margin-bottom: 12px;
+      display: none;
+    }
+
+    .result-item {
+      padding: 12px 16px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border-soft);
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.15s ease;
+    }
+    
+    .result-item:last-child { border-bottom: none; }
+
+    .result-item:hover {
+      background: rgba(59, 130, 246, 0.1);
+      color: #60a5fa;
+    }
+
+    .result-item b {
+      color: var(--text-muted);
+      font-weight: 500;
+      font-size: 12px;
+    }
+
+    /* --- STATUS BAR --- */
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-soft);
+    }
+
+    #active-server-name b { color: var(--text-main); font-weight: 600; }
+
+    #status {
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #status::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-danger);
+      box-shadow: 0 0 8px var(--accent-danger);
+    }
+
+    #status.connected::before {
+      background: var(--accent-success);
+      box-shadow: 0 0 10px var(--accent-success);
+    }
+
+    /* --- MAP VIEWPORT --- */
+    #map-viewport {
+      width: 100%;
+      max-width: 900px;
+      height: 720px;
+      background-color: #030407;
+      border: 1px solid var(--border-soft);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      position: relative;
+      cursor: grab;
+      transition: max-width 0.3s ease, height 0.3s ease, border-radius 0.3s ease;
+    }
+
+    #map-viewport:active { cursor: grabbing; }
+
+    /* Fullscreen / Expanded State */
+    #map-viewport.is-expanded {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: 100vw !important;
+      border-radius: 0;
+      z-index: 9999;
+      border: none;
+    }
+
+    #map-container {
+      width: 800px;
+      height: 800px;
+      background-color: #0d1117;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      transform-origin: 0 0;
+      position: absolute;
+      top: 0; left: 0;
+      will-change: transform;
+    }
+
+    .grid-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+      background-size: 53.33px 53.33px;
+      pointer-events: none;
+    }
+
+    /* --- MAP PLACEHOLDER (PERFECTLY CENTERED) --- */
+    #map-placeholder {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 12px;
+      color: var(--border-soft);
+      pointer-events: none;
+      z-index: 5;
+      width: 100%;
+    }
+
+    #map-placeholder svg {
+      width: 64px; height: 64px;
+      opacity: 0.7;
+    }
+
+    #map-placeholder h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    /* --- FLOATING MAP CONTROLS --- */
+    .viewport-overlay-controls {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      z-index: 100;
+      display: flex;
+      gap: 8px;
+    }
+
+    .viewport-overlay-controls button {
+      background: rgba(19, 27, 44, 0.7);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 14px;
+      font-size: 13px;
+      border-radius: 8px;
+    }
+
+    .viewport-overlay-controls button:hover {
+      background: rgba(30, 41, 59, 0.9);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* --- PLAYER MARKERS --- */
+    .player-marker {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: var(--accent-cyan);
+      border: 2px solid #030407;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 10px var(--accent-cyan);
+      transition: left 0.3s linear, top 0.3s linear;
+      z-index: 10;
+    }
+
+    .player-marker.is-me {
+      background: var(--accent-warning);
+      box-shadow: 0 0 12px var(--accent-warning);
+      width: 14px;
+      height: 14px;
+      z-index: 20;
+    }
+
+    .player-marker.is-me::after {
+      content: '';
+      position: absolute;
+      top: -5px; left: -5px; right: -5px; bottom: -5px;
+      border: 2px solid var(--accent-warning);
+      border-radius: 50%;
+      animation: radarPulse 2s infinite cubic-bezier(0.165, 0.84, 0.44, 1);
+    }
+
+    @keyframes radarPulse {
+      0% { transform: scale(0.8); opacity: 1; }
+      100% { transform: scale(2.5); opacity: 0; }
+    }
+
+    .player-marker.offline {
+      background: var(--accent-danger);
+      box-shadow: 0 0 6px var(--accent-danger);
+      opacity: 0.6;
+    }
+
+    .player-label {
+      position: absolute;
+      top: -26px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      color: #fff;
+      background: rgba(6, 9, 15, 0.85);
+      backdrop-filter: blur(4px);
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      pointer-events: none;
+      box-shadow: var(--shadow-md);
+      letter-spacing: 0.5px;
+    }
+
+  </style>
+
+  <!-- Firebase Scripts -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+  <div class="header-container">
+    <h1 class="header-title">Novulon's Rust Tracker</h1>
+    <span class="nrt-badge">NRT</span>
+  </div>
+
+  <div class="controls-card">
+    <!-- Steam Credentials Row -->
+    <div class="input-row">
+      <div class="input-group">
+        <input type="text" id="steam-id" placeholder="Your Steam ID64..." oninput="saveCredentials()">
+        <button class="btn-help" onclick="toggleHelp('steam-help')" title="How to find Steam ID64">?</button>
+      </div>
+      <div class="input-group">
+        <input type="password" id="player-token" placeholder="Your Player Token..." oninput="saveCredentials()">
+        <button class="btn-help" onclick="toggleHelp('token-help')" title="How to find Player Token">?</button>
+      </div>
+    </div>
+
+    <!-- Steam ID Help Box -->
+    <div id="steam-help" class="help-box" style="display: none;">
+      <h4>How to find your Steam ID64:</h4>
+      <ol>
+        <li>Open Steam, click your profile name at the top right, and select <b>View Profile</b>.</li>
+        <li>Copy the link (URL) from your browser address bar.</li>
+        <li>If the link ends in a 17-digit number starting with <code>765611...</code>, that is your Steam ID64.</li>
+        <li>If you have a custom profile link, paste it into <a href="https://steamid.io" target="_blank" style="color: var(--accent-cyan);">steamid.io</a> to get your numeric ID64.</li>
+      </ol>
+    </div>
+
+    <!-- Player Token Help Box -->
+    <div id="token-help" class="help-box" style="display: none;">
+      <h4>How to get your Rust+ Player Token:</h4>
+      <ol>
+        <li>Open Command Prompt and register your credentials (one-time setup):<br><code>npx @liamcottle/rustplus.js fcm-register</code><br>Complete the Steam login in the browser window that opens.</li>
+        <li>In Rust, press <b>Esc</b>, select <b>SESSION</b>, and click <b>PAIRING</b>. If a popup asks to allow push notifications, click the green <b>ENABLE</b> button.</li>
+        <li><b>Ignore mobile app links:</b> You do <i>not</i> need to download or open the iOS/Android phone app.</li>
+        <li>Start the listener in Command Prompt:<br><code>npx @liamcottle/rustplus.js fcm-listen</code></li>
+        <li>Click <b>PAIRING</b> in Rust. Look inside the <code>body</code> section of the terminal output for <code>"playerToken":"123456789"</code> and copy just the number sequence inside the quotes.</li>
+      </ol>
+    </div>
+
+    <!-- BattleMetrics Search Row -->
+    <div class="input-row">
+      <div class="input-group">
+        <input type="text" id="server-search-input" placeholder="Search BattleMetrics for Server Name..." onkeydown="if(event.key === 'Enter') searchServer()">
+        <button class="btn-help" onclick="toggleHelp('bm-help')" title="How BattleMetrics Search works">?</button>
+      </div>
+      <button class="btn-success" onclick="searchServer()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        Search
+      </button>
+    </div>
+
+    <!-- BattleMetrics Help Box -->
+    <div id="bm-help" class="help-box" style="display: none;">
+      <h4>How BattleMetrics Search works:</h4>
+      <ol>
+        <li>Type all or part of your server's name (e.g., <code>Rustafied</code>, <code>Reddit Main</code>) into the box.</li>
+        <li>Click <b>Search</b> to query BattleMetrics for active matching Rust servers.</li>
+        <li>Click any server from the dropdown results to select it and update your active target server in Firebase.</li>
+      </ol>
+    </div>
+
+    <div id="search-results"></div>
+
+    <!-- Self Highlight Row -->
+    <div class="input-row">
+      <div class="input-group">
+        <input type="text" id="my-identity" placeholder="Highlight yourself (Enter Steam Name or ID)..." oninput="updateMyIdentity()">
+        <button class="btn-help" onclick="toggleHelp('highlight-help')" title="How Self Highlighting works">?</button>
+      </div>
+    </div>
+
+    <!-- Highlight Help Box -->
+    <div id="highlight-help" class="help-box" style="display: none;">
+      <h4>How Self Highlighting works:</h4>
+      <ol>
+        <li>Enter your exact Steam name or 64-bit Steam ID in the input box.</li>
+        <li>When active player data loads on the map, your marker will be highlighted in orange with an animated radar pulse.</li>
+        <li>Your preference is automatically saved locally in your browser so you don't have to re-enter it next time.</li>
+      </ol>
+    </div>
+
+    <div class="status-bar">
+      <span id="active-server-name">Active Server: Auto-Detecting... (<span id="active-server-address">--</span>)</span>
+      <span id="status">Connecting...</span>
+    </div>
+  </div>
+
+  <!-- Interactive Map Window -->
+  <div id="map-viewport">
+    
+    <!-- Centered Placeholder -->
+    <div id="map-placeholder">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+        <line x1="8" y1="2" x2="8" y2="18"></line>
+        <line x1="16" y1="6" x2="16" y2="22"></line>
+      </svg>
+      <h2>Waiting for Map Data...</h2>
+    </div>
+
+    <div class="viewport-overlay-controls">
+      <button class="btn-secondary" onclick="toggleAnimations()" id="anim-btn">⚡ Plain Mode</button>
+      <button class="btn-secondary" onclick="toggleExpandMap()" id="expand-btn">⛶ Expand</button>
+      <button class="btn-secondary" onclick="resetZoomView()">↺ Recenter</button>
+    </div>
+
+    <div id="map-container">
+      <div class="grid-overlay"></div>
+    </div>
+  </div>
+
+  <script>
+    // --- FIREBASE CONFIGURATION ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyCLAltj3sk3sTRmTGNUIIYogp1u6FXOy10",
+      authDomain: "rust-live-af441.firebaseapp.com",
+      databaseURL: "https://rust-live-af441-default-rtdb.firebaseio.com",
+      projectId: "rust-live-af441",
+      storageBucket: "rust-live-af441.firebasestorage.app",
+      messagingSenderId: "714956573182",
+      appId: "1:714956573182:web:5415701c5add60983798af"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    
+    // --- VARIABLES ---
+    const viewport = document.getElementById('map-viewport');
+    const mapContainer = document.getElementById('map-container');
+    const statusDiv = document.getElementById('status');
+    const searchResultsDiv = document.getElementById('search-results');
+    const mapPlaceholder = document.getElementById('map-placeholder');
+    
+    let MAP_SIZE = 4500;
+    const MAP_PIXELS = 800; 
+    let myIdentity = localStorage.getItem('my_rust_identity') || '';
+    document.getElementById('my-identity').value = myIdentity;
+
+    document.getElementById('steam-id').value = localStorage.getItem('rust_steam_id') || '';
+    document.getElementById('player-token').value = localStorage.getItem('rust_player_token') || '';
+
+    let animationsDisabled = localStorage.getItem('nrt_disable_anim') === 'true';
+
+    const activeMarkers = {};
+
+    // --- TOGGLE HELP BOXES ---
+    function toggleHelp(id) {
+      const allHelpBoxes = document.querySelectorAll('.help-box');
+      allHelpBoxes.forEach(box => {
+        if (box.id !== id) {
+          box.style.display = 'none';
+        }
+      });
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+      }
+    }
+
+    // --- ANIMATION / PLAIN MODE TOGGLE ---
+    function applyAnimationState() {
+      const btn = document.getElementById('anim-btn');
+      if (animationsDisabled) {
+        document.body.classList.add('no-animations');
+        btn.innerHTML = "✨ Enable FX";
+      } else {
+        document.body.classList.remove('no-animations');
+        btn.innerHTML = "⚡ Plain Mode";
+      }
+    }
+
+    function toggleAnimations() {
+      animationsDisabled = !animationsDisabled;
+      localStorage.setItem('nrt_disable_anim', animationsDisabled);
+      applyAnimationState();
+    }
+
+    // --- CREDENTIAL MANAGEMENT ---
+    function saveCredentials() {
+      const steamId = document.getElementById('steam-id').value.trim();
+      const playerToken = document.getElementById('player-token').value.trim();
+      localStorage.setItem('rust_steam_id', steamId);
+      localStorage.setItem('rust_player_token', playerToken);
+    }
+
+    function selectServer(name, ip, port) {
+      const steamId = document.getElementById('steam-id').value.trim();
+      const playerToken = document.getElementById('player-token').value.trim();
+
+      if (!steamId || !playerToken) {
+        alert("Please enter your Steam ID and Player Token before selecting a server!");
+        return;
+      }
+
+      const serverConfig = {
+        name: name,
+        ip: ip,
+        port: String(port),
+        steamId: steamId,
+        playerToken: playerToken
+      };
+
+      db.ref('target_server').set(serverConfig);
+
+      document.getElementById('active-server-name').innerHTML = `Active Server: <b>${name}</b>`;
+      document.getElementById('active-server-address').innerText = `${ip}:${port}`;
+      searchResultsDiv.style.display = 'none';
+    }
+
+    // --- MOUSE-CENTERED ZOOM & PANNING ---
+    let scale = 1, pointX = 0, pointY = 0, panning = false, start = { x: 0, y: 0 };
+
+    function setTransform() {
+      const vWidth = viewport.clientWidth;
+      const vHeight = viewport.clientHeight;
+      
+      const minScale = Math.max(vWidth / MAP_PIXELS, vHeight / MAP_PIXELS);
+      if (scale < minScale) {
+        scale = minScale;
+      }
+
+      const mapScaledWidth = MAP_PIXELS * scale;
+      const mapScaledHeight = MAP_PIXELS * scale;
+
+      const minX = vWidth - mapScaledWidth;
+      const minY = vHeight - mapScaledHeight;
+
+      pointX = Math.max(minX, Math.min(0, pointX));
+      pointY = Math.max(minY, Math.min(0, pointY));
+
+      mapContainer.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`;
+
+      Object.values(activeMarkers).forEach(marker => {
+        const label = marker.querySelector('.player-label');
+        if (label) label.style.transform = `translateX(-50%) scale(${1 / scale})`;
+      });
+    }
+
+    window.addEventListener('resize', () => {
+      setTransform(); 
+    });
+
+    viewport.addEventListener('wheel', (e) => {
+      e.preventDefault();
+
+      const rect = viewport.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const vWidth = viewport.clientWidth;
+      const vHeight = viewport.clientHeight;
+      const minScale = Math.max(vWidth / MAP_PIXELS, vHeight / MAP_PIXELS);
+
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
+      let nextScale = scale * zoomFactor;
+
+      nextScale = Math.min(Math.max(minScale, nextScale), 6);
+
+      const scaleRatio = nextScale / scale;
+      pointX = mouseX - (mouseX - pointX) * scaleRatio;
+      pointY = mouseY - (mouseY - pointY) * scaleRatio;
+      scale = nextScale;
+
+      setTransform();
+    }, { passive: false });
+
+    viewport.onmousedown = (e) => {
+      if (e.button !== 0) return;
+      panning = true;
+      start = { x: e.clientX - pointX, y: e.clientY - pointY };
+    };
+
+    window.onmousemove = (e) => {
+      if (!panning) return;
+      pointX = e.clientX - start.x;
+      pointY = e.clientY - start.y;
+      setTransform();
+    };
+
+    window.onmouseup = () => { panning = false; };
+
+    function resetZoomView() {
+      const vWidth = viewport.clientWidth;
+      const vHeight = viewport.clientHeight;
+      scale = Math.max(vWidth / MAP_PIXELS, vHeight / MAP_PIXELS);
+      pointX = (vWidth - MAP_PIXELS * scale) / 2;
+      pointY = (vHeight - MAP_PIXELS * scale) / 2;
+      setTransform();
+    }
+
+    function toggleExpandMap() {
+      viewport.classList.toggle('is-expanded');
+      const btn = document.getElementById('expand-btn');
+      if (viewport.classList.contains('is-expanded')) {
+        btn.innerHTML = "🗗 Compress";
+      } else {
+        btn.innerHTML = "⛶ Expand";
+      }
+      setTimeout(resetZoomView, 10);
+    }
+
+    // --- UTILITIES ---
+    function updateMyIdentity() {
+      myIdentity = document.getElementById('my-identity').value.trim().toLowerCase();
+      localStorage.setItem('my_rust_identity', myIdentity);
+    }
+
+    function getRustGrid(x, z, mapSize) {
+      const gridSize = 146.25;
+      const halfMap = mapSize / 2;
+      const col = Math.floor((x + halfMap) / gridSize);
+      const row = Math.floor((halfMap - z) / gridSize);
+
+      let letter = "";
+      let c = col;
+      while (c >= 0) {
+        letter = String.fromCharCode(65 + (c % 26)) + letter;
+        c = Math.floor(c / 26) - 1;
+      }
+      return `${letter}${Math.max(0, row)}`;
+    }
+
+    // --- FIREBASE LISTENERS ---
+    db.ref('.info/connected').on('value', (snap) => {
+      if (snap.val() === true) {
+        statusDiv.innerText = "Connected";
+        statusDiv.classList.add('connected');
+      } else {
+        statusDiv.innerText = "Disconnected";
+        statusDiv.classList.remove('connected');
+      }
+    });
+
+    db.ref('mapSize').on('value', (snapshot) => {
+      const size = snapshot.val();
+      if (size) MAP_SIZE = Number(size);
+    });
+
+    db.ref('mapImage').on('value', (snapshot) => {
+      const imageStr = snapshot.val();
+      if (imageStr) {
+        const src = imageStr.startsWith('data:image') ? imageStr : `data:image/jpeg;base64,${imageStr}`;
+        mapContainer.style.backgroundImage = `url(${src})`;
+        mapPlaceholder.style.display = 'none';
+      }
+    });
+
+    db.ref().on('value', (snapshot) => {
+      const data = snapshot.val();
+      if (!data) return;
+
+      if (data.live_session && data.live_session.serverInfo) {
+        const info = data.live_session.serverInfo;
+        document.getElementById('active-server-name').innerHTML = `Active Server: <b>${info.name || 'Rust Server'}</b>`;
+        document.getElementById('active-server-address').innerText = `${info.ip}:${info.port}`;
+      }
+
+      const players = data.live_session ? data.live_session.players : data.players;
+      if (!players) return;
+
+      const currentFrameIds = new Set(Object.keys(players));
+
+      Object.keys(activeMarkers).forEach(id => {
+        if (!currentFrameIds.has(id)) {
+          activeMarkers[id].remove();
+          delete activeMarkers[id];
+        }
+      });
+
+      Object.keys(players).forEach(id => {
+        const p = players[id];
+
+        const pixelX = ((p.x + (MAP_SIZE / 2)) / MAP_SIZE) * MAP_PIXELS;
+        const pixelY = (1 - ((p.z + (MAP_SIZE / 2)) / MAP_SIZE)) * MAP_PIXELS;
+
+        let marker = activeMarkers[id];
+
+        if (!marker) {
+          marker = document.createElement('div');
+          marker.className = 'player-marker';
+          
+          const label = document.createElement('div');
+          label.className = 'player-label';
+          marker.appendChild(label);
+          
+          mapContainer.appendChild(marker);
+          activeMarkers[id] = marker;
+        }
+
+        const isMe = myIdentity && (p.name.toLowerCase().includes(myIdentity) || id.toLowerCase() === myIdentity);
+        if (isMe) {
+          marker.classList.add('is-me');
+        } else {
+          marker.classList.remove('is-me');
+        }
+
+        if (p.isOnline === false) {
+          marker.classList.add('offline');
+        } else {
+          marker.classList.remove('offline');
+        }
+
+        marker.style.left = `${pixelX}px`;
+        marker.style.top = `${pixelY}px`;
+
+        const gridCoord = getRustGrid(p.x, p.z, MAP_SIZE);
+        const label = marker.querySelector('.player-label');
+        label.innerText = `${isMe ? '★ ' : ''}${p.name} [${gridCoord}]`;
+      });
+
+      setTransform();
+    });
+
+    // --- DIRECT BATTLEMETRICS SEARCH FIX ---
+   async function searchServer() {
+  const steamId = document.getElementById('steam-id').value.trim();
+  const playerToken = document.getElementById('player-token').value.trim();
+
+  if (!steamId || !playerToken) {
+    alert("Please enter both your Steam ID64 and Player Token before searching for servers!");
+    searchResultsDiv.style.display = 'none';
+    return;
+  }
+
+  const query = document.getElementById('server-search-input').value.trim();
+  if (!query) return;
+
+  searchResultsDiv.style.display = 'block';
+  searchResultsDiv.innerHTML = '<div class="result-item">Searching servers...</div>';
+
+  try {
+    // Call your new secure Cloudflare Pages Function
+    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    searchResultsDiv.innerHTML = '';
+    if (!data.data || data.data.length === 0) {
+      searchResultsDiv.innerHTML = '<div class="result-item">No Rust servers found</div>';
+      return;
+    }
+
+    data.data.forEach(server => {
+      const { name, ip, port, players, maxPlayers } = server.attributes;
+      const item = document.createElement('div');
+      item.className = 'result-item';
+      item.innerHTML = `<span>${name}</span> <b>${ip || 'N/A'}:${port || '28015'} (${players}/${maxPlayers})</b>`;
+      
+      item.onclick = () => {
+        selectServer(name, ip, port);
+      };
+
+      searchResultsDiv.appendChild(item);
+    });
+  } catch (err) {
+    console.error("Fetch Error:", err);
+    searchResultsDiv.innerHTML = `<div class="result-item">Error fetching server list (${err.message})</div>`;
+  }
+}
+
+    window.onload = () => {
+      applyAnimationState();
+      resetZoomView();
+    };
+  </script>
+</body>
+</html>
