@@ -10,9 +10,7 @@ export async function onRequest(context) {
     });
   }
 
-  // Extract core keywords from the query (ignoring pipes, symbols, and small words)
   const cleanedQuery = query.replace(/[|]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-  const searchTerms = cleanedQuery.split(' ').filter(term => term.length > 2);
 
   async function fetchFromBM(targetUrl) {
     try {
@@ -32,29 +30,29 @@ export async function onRequest(context) {
 
   let servers = null;
 
-  // Since BattleMetrics strict search fails on pipes/symbols, let's fetch active Rust servers directly 
-  // and do a robust case-insensitive keyword match on the server names.
+  // 1. Fetch general active Rust servers from BattleMetrics
   const generalUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&page[size]=100`;
   const allServers = await fetchFromBM(generalUrl);
   
   if (allServers && allServers.length > 0) {
+    // 2. Filter locally by matching any part of the query string or individual keywords
+    const searchTerms = cleanedQuery.split(' ').filter(term => term.length > 0);
+    
     servers = allServers.filter(server => {
       const name = (server.attributes && server.attributes.name) ? server.attributes.name.toLowerCase() : '';
-      // Match if the server name contains at least two of the primary keywords (e.g., 'hapis', 'monthly')
-      // Or matches the primary token directly
-      let matches = 0;
-      searchTerms.forEach(term => {
-        if (name.includes(term)) matches++;
-      });
-      return matches > 0 || name.includes(cleanedQuery);
+      return searchTerms.every(term => name.includes(term));
     });
   }
 
-  // Fallback to standard search if local filter returned nothing
-  if (!servers || servers.length === 0) {
-    const singleTerm = searchTerms[0] || cleanedQuery;
-    const searchUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&filter[search]=${encodeURIComponent(singleTerm)}&page[size]=25`;
-    servers = await fetchFromBM(searchUrl);
+  // 3. If local filter was too strict or returned nothing, try a broader keyword match (any word matches)
+  if ((!servers || servers.length === 0) && allServers) {
+    const primaryTerm = cleanedQuery.split(' ')[0];
+    if (primaryTerm && primaryTerm.length > 1) {
+      servers = allServers.filter(server => {
+        const name = (server.attributes && server.attributes.name) ? server.attributes.name.toLowerCase() : '';
+        return name.includes(primaryTerm);
+      });
+    }
   }
 
   if (servers && servers.length > 0) {
