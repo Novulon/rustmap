@@ -910,14 +910,16 @@
     return;
   }
 
-  const query = document.getElementById('server-search-input').value.trim();
+  // Explicitly reference the input field element
+  const searchInput = document.getElementById('server-search-input');
+  const query = searchInput ? searchInput.value.trim() : '';
+  
   if (!query) return;
 
   searchResultsDiv.style.display = 'block';
   searchResultsDiv.innerHTML = '<div class="result-item">Searching servers...</div>';
 
   try {
-    // Call your new secure Cloudflare Pages Function
     const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
 
     if (!response.ok) {
