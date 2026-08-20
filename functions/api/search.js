@@ -11,6 +11,7 @@ export async function onRequest(context) {
   }
 
   const cleanedQuery = query.replace(/[|]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  const searchTerms = cleanedQuery.split(' ').filter(term => term.length > 1);
 
   async function fetchFromBM(targetUrl) {
     try {
@@ -30,29 +31,33 @@ export async function onRequest(context) {
 
   let servers = null;
 
-  // 1. Fetch general active Rust servers from BattleMetrics
+  // Fetch active Rust servers from BattleMetrics
   const generalUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&page[size]=100`;
   const allServers = await fetchFromBM(generalUrl);
   
   if (allServers && allServers.length > 0) {
-    // 2. Filter locally by matching any part of the query string or individual keywords
-    const searchTerms = cleanedQuery.split(' ').filter(term => term.length > 0);
-    
-    servers = allServers.filter(server => {
+    // Score each server based on how many search keywords appear in its name
+    const scoredServers = allServers.map(server => {
       const name = (server.attributes && server.attributes.name) ? server.attributes.name.toLowerCase() : '';
-      return searchTerms.every(term => name.includes(term));
+      let score = 0;
+      searchTerms.forEach(term => {
+        if (name.includes(term)) score++;
+      });
+      return { server, score };
     });
+
+    // Sort by highest score (most matching keywords)
+    scoredServers.sort((a, b) => b.score - a.score);
+    
+    // Keep servers that matched at least one keyword
+    servers = scoredServers.filter(item => item.score > 0).map(item => item.server);
   }
 
-  // 3. If local filter was too strict or returned nothing, try a broader keyword match (any word matches)
-  if ((!servers || servers.length === 0) && allServers) {
-    const primaryTerm = cleanedQuery.split(' ')[0];
-    if (primaryTerm && primaryTerm.length > 1) {
-      servers = allServers.filter(server => {
-        const name = (server.attributes && server.attributes.name) ? server.attributes.name.toLowerCase() : '';
-        return name.includes(primaryTerm);
-      });
-    }
+  // Fallback to direct search if no scored matches found
+  if (!servers || servers.length === 0) {
+    const primaryTerm = searchTerms[0] || cleanedQuery;
+    const searchUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&filter[search]=${encodeURIComponent(primaryTerm)}&page[size]=25`;
+    servers = await fetchFromBM(searchUrl);
   }
 
   if (servers && servers.length > 0) {
