@@ -10,14 +10,10 @@ export async function onRequest(context) {
     });
   }
 
-  // Clean query: strip out pipes (|) and excessive spacing which break BattleMetrics search
-  const cleanedQuery = query.replace(/[|]/g, ' ').replace(/\s+/g, ' ').trim();
-  const words = cleanedQuery.split(' ');
-  const shortQuery = words.slice(0, 3).join(' ');
+  const cleanedQuery = query.replace(/[|]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  const searchTerms = cleanedQuery.split(' ').filter(term => term.length > 1);
 
-  async function fetchBM(qStr) {
-    const targetUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&filter[search]=${encodeURIComponent(qStr)}&page[size]=10`;
-    
+  async function fetchFromBM(targetUrl) {
     // Method 1: Direct fetch
     try {
       const res = await fetch(targetUrl, {
@@ -28,7 +24,7 @@ export async function onRequest(context) {
       });
       if (res.ok) {
         const json = await res.json();
-        if (json && json.data && json.data.length > 0) return json;
+        if (json && json.data) return json.data;
       }
     } catch (e) {}
 
@@ -39,7 +35,7 @@ export async function onRequest(context) {
       if (res.ok) {
         const text = await res.text();
         const json = JSON.parse(text);
-        if (json && json.data && json.data.length > 0) return json;
+        if (json && json.data) return json.data;
       }
     } catch (e) {}
 
@@ -49,28 +45,35 @@ export async function onRequest(context) {
       const res = await fetch(proxyUrl);
       if (res.ok) {
         const json = await res.json();
-        if (json && json.data && json.data.length > 0) return json;
+        if (json && json.data) return json.data;
       }
     } catch (e) {}
 
     return null;
   }
 
-  // 1. Try with the cleaned query
-  let data = await fetchBM(cleanedQuery);
+  let servers = null;
 
-  // 2. Fallback to short query if no results found
-  if ((!data || !data.data || data.data.length === 0) && shortQuery !== cleanedQuery && shortQuery.length > 1) {
-    data = await fetchBM(shortQuery);
+  // Try standard BattleMetrics search first
+  const searchUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&filter[search]=${encodeURIComponent(query)}&page[size]=25`;
+  servers = await fetchFromBM(searchUrl);
+
+  // If standard search returns nothing, fetch active Rust servers and match keywords locally
+  if (!servers || servers.length === 0) {
+    const generalUrl = `https://api.battlemetrics.com/servers?filter[game]=rust&page[size]=100`;
+    const allServers = await fetchFromBM(generalUrl);
+    
+    if (allServers && allServers.length > 0) {
+      servers = allServers.filter(server => {
+        const name = (server.attributes && server.attributes.name) ? server.attributes.name.toLowerCase() : '';
+        // Match if any significant keyword (like 'hapis' or 'monthly') is present in the server name
+        return searchTerms.some(term => name.includes(term));
+      });
+    }
   }
 
-  // 3. Fallback to first keyword if multiple words exist
-  if ((!data || !data.data || data.data.length === 0) && words.length > 1) {
-    data = await fetchBM(words[0]);
-  }
-
-  if (data && data.data) {
-    return new Response(JSON.stringify(data), {
+  if (servers && servers.length > 0) {
+    return new Response(JSON.stringify({ data: servers }), {
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'
